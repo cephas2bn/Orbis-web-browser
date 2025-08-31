@@ -1,0 +1,50 @@
+{
+    "name": "orbis-browser",
+    "version": "1.0.0",
+    "author": "Cephas Acquah Foson <https://github.com/cephas2bn>",
+    "description": "A lightweight multi-tab browser built with Electron.",
+    "main": "main.js",
+    "scripts": {
+        "start": "electron .",
+        "pack": "electron-builder --dir",
+        "dist": "electron-builder"
+    },
+    "build": {
+        "appId": "com.cephas.orbisbrowser",
+        "productName": "Orbis Browser",
+        "copyright": "Copyright © 2025 Cephas Acquah Foson",
+        "directories": {
+            "output": "dist"
+        },
+        "files": [
+            "**/*"
+        ],
+        "extraResources": [],
+        "win": {
+            "target": "nsis",
+            "icon": "assets/orbis-icon.ico"
+        },
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true,
+            "shortcutName": "Orbis Browser"
+        },
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "cephas2bn",
+                "repo": "orbis-browser"
+            }
+        ]
+    },
+    "devDependencies": {
+        "electron": "^28.0.0",
+        "electron-builder": "^24.0.0"
+    },
+    "dependencies": {
+        "electron-updater": "^6.6.2"
+    }
+}

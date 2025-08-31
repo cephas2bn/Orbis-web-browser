@@ -1,0 +1,4 @@
+# Orbis Browser dependencies (Node.js / Electron)
+electron==28.0.0
+electron-builder==24.0.0
+electron-updater==6.6.2

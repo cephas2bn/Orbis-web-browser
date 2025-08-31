@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis Browser</title>
+    <style>
+        :root {
+            --bg: #0b1020;
+            --panel: #121a33;
+            --panel-2: #0f162b;
+            --text: #e6ecff;
+            --muted: #8ea0d0;
+            --accent: #6aa5ff;
+            --accent-2: #7cf6d2;
+            --shadow: 0 6px 16px rgba(0, 0, 0, .25);
+            --radius: 10px;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background: var(--bg);
+            color: var(--text);
+            font: 14px system-ui, sans-serif;
+            display: grid;
+            grid-template-rows: auto auto 1fr auto;
+            height: 100vh;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            background: var(--panel);
+            padding: 6px 10px;
+            box-shadow: var(--shadow);
+        }
+
+        .addr {
+            flex: 1;
+            display: flex;
+            gap: 6px;
+        }
+
+        .addr input {
+            flex: 1;
+            padding: 8px;
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: var(--radius);
+            background: var(--panel-2);
+            color: var(--text);
+        }
+
+        button {
+            background: var(--panel-2);
+            border: none;
+            border-radius: var(--radius);
+            color: var(--text);
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--panel-2);
+            padding: 4px 6px;
+            overflow-x: auto;
+        }
+
+        .tab {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--panel);
+            padding: 4px 8px;
+            border-radius: var(--radius);
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        .tab.active {
+            background: var(--accent);
+            color: #fff;
+        }
+
+        .tab .close {
+            font-size: 12px;
+            cursor: pointer;
+        }
+
+        .statusbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: var(--panel);
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .drawer {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            bottom: 20px;
+            width: 300px;
+            background: var(--panel);
+            border-radius: var(--radius);
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: var(--shadow);
+            overflow-y: auto;
+        }
+
+        .drawer.open {
+            display: flex;
+        }
+
+        .drawer h3 {
+            margin: 0;
+        }
+
+        .row {
+            background: var(--panel-2);
+            padding: 6px;
+            border-radius: var(--radius);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .row a {
+            color: var(--text);
+            text-decoration: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="toolbar">
+        <button id="backBtn">←</button>
+        <button id="fwdBtn">→</button>
+        <button id="reloadBtn">⟳</button>
+        <button id="homeBtn">🏠</button>
+        <div class="addr">
+            <input id="urlInput" placeholder="Enter URL or search..." />
+            <button id="goBtn">Go</button>
+        </div>
+        <button id="bookmarkBtn">⭐</button>
+        <button id="drawerToggle">📚</button>
+        <button id="newTabBtn">➕</button>
+    </div>
+
+    <div class="tabs" id="tabBar"></div>
+
+    <main id="viewport"></main>
+
+    <div class="statusbar">
+        <span id="hint">Ready</span>
+        <span id="clock"></span>
+    </div>
+
+    <div class="drawer" id="drawer">
+        <h3>Bookmarks</h3>
+        <div id="bmList"></div>
+        <h3>History</h3>
+        <div id="histList"></div>
+        <button id="closeDrawerBtn">Close</button>
+    </div>
+
+    <script>
+        const tabBar = document.getElementById("tabBar");
+        const urlInput = document.getElementById("urlInput");
+        const goBtn = document.getElementById("goBtn");
+        const backBtn = document.getElementById("backBtn");
+        const fwdBtn = document.getElementById("fwdBtn");
+        const reloadBtn = document.getElementById("reloadBtn");
+        const homeBtn = document.getElementById("homeBtn");
+        const newTabBtn = document.getElementById("newTabBtn");
+        const bookmarkBtn = document.getElementById("bookmarkBtn");
+        const drawer = document.getElementById("drawer");
+        const drawerToggle = document.getElementById("drawerToggle");
+        const closeDrawerBtn = document.getElementById("closeDrawerBtn");
+        const bmList = document.getElementById("bmList");
+        const histList = document.getElementById("histList");
+        const hint = document.getElementById("hint");
+        const clock = document.getElementById("clock");
+
+        let tabs = [];
+        let activeTabId = null;
+
+        function normalizeInput(input) {
+            let s = input.trim();
+            if (!s) return "";
+            const proto = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s);
+            if (proto) return s;
+            const looksUrl = /\.[a-z]{2,}(:\d+)?(\/|$)/i.test(s);
+            if (looksUrl) return "https://" + s;
+            return "https://www.google.com/search?q=" + encodeURIComponent(s);
+        }
+
+        function updateClock() {
+            const d = new Date();
+            clock.textContent = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        }
+        updateClock(); setInterval(updateClock, 30000);
+
+        function addTabUI(id, title = "New Tab") {
+            const tab = document.createElement("div");
+            tab.className = "tab";
+            tab.dataset.id = id;
+            tab.innerHTML = `<span class="title">${title}</span> <span class="close">✖</span>`;
+            tab.querySelector(".close").addEventListener("click", (e) => {
+                e.stopPropagation();
+                window.orbisAPI.closeTab(id);
+                tab.remove();
+            });
+            tab.addEventListener("click", () => {
+                window.orbisAPI.activateTab(id);
+                setActiveTabUI(id);
+            });
+            tabBar.appendChild(tab);
+            tabs.push(id);
+            setActiveTabUI(id);
+        }
+
+        // report actual heights so BrowserView sits exactly between top & bottom chrome
+        function reportHeights() {
+            const top = (document.querySelector(".toolbar")?.offsetHeight || 0)
+                + (document.getElementById("tabBar")?.offsetHeight || 0);
+            const bottom = (document.querySelector(".statusbar")?.offsetHeight || 0);
+            window.orbisAPI.setChromeHeights(top, bottom);
+        }
+        window.addEventListener("load", reportHeights);
+        window.addEventListener("resize", reportHeights);
+
+        // when creating a tab, use the id returned by main
+        newTabBtn.addEventListener("click", async () => {
+            const id = await window.orbisAPI.newTab("https://google.com");
+            addTabUI(id, "Google");
+        });
+
+        (async () => {
+            reportHeights();
+            const id = await window.orbisAPI.newTab("https://google.com");
+            addTabUI(id, "Google");
+        })();
+
+        function setActiveTabUI(id) {
+            activeTabId = id;
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            const el = document.querySelector(`.tab[data-id="${id}"]`);
+            if (el) el.classList.add("active");
+        }
+
+        // Navigation
+        goBtn.addEventListener("click", () => {
+            const url = normalizeInput(urlInput.value);
+            if (url) window.orbisAPI.navigate(url);
+        });
+        urlInput.addEventListener("keydown", e => {
+            if (e.key === "Enter") {
+                const url = normalizeInput(urlInput.value);
+                if (url) window.orbisAPI.navigate(url);
+            }
+        });
+        backBtn.addEventListener("click", () => window.orbisAPI.back());
+        fwdBtn.addEventListener("click", () => window.orbisAPI.forward());
+        reloadBtn.addEventListener("click", () => window.orbisAPI.reload());
+        homeBtn.addEventListener("click", () => window.orbisAPI.navigate("https://google.com"));
+
+        // Tabs
+        newTabBtn.addEventListener("click", async () => {
+            const id = Date.now().toString();
+            await window.orbisAPI.newTab("https://google.com");
+            addTabUI(id, "Google");
+        });
+
+        // Bookmarks
+        bookmarkBtn.addEventListener("click", async () => {
+            const url = urlInput.value;
+            if (!url) return;
+            await window.orbisAPI.addBookmark("Site", url);
+            loadBookmarks();
+            hint.textContent = "Bookmarked!";
+        });
+
+        async function loadBookmarks() {
+            const bms = await window.orbisAPI.getBookmarks();
+            bmList.innerHTML = "";
+            bms.forEach(b => {
+                const row = document.createElement("div");
+                row.className = "row";
+                row.innerHTML = `<a href="#">${b.name}</a>`;
+                row.querySelector("a").addEventListener("click", e => {
+                    e.preventDefault();
+                    urlInput.value = b.url;
+                    window.orbisAPI.navigate(b.url);
+                });
+                bmList.appendChild(row);
+            });
+        }
+
+        async function loadHistory() {
+            const hist = await window.orbisAPI.getHistory();
+            histList.innerHTML = "";
+            hist.forEach(h => {
+                const row = document.createElement("div");
+                row.className = "row";
+                row.innerHTML = `<a href="#">${h.title || h.url}</a>`;
+                row.querySelector("a").addEventListener("click", e => {
+                    e.preventDefault();
+                    urlInput.value = h.url;
+                    window.orbisAPI.navigate(h.url);
+                });
+                histList.appendChild(row);
+            });
+        }
+
+        // Drawer
+        drawerToggle.addEventListener("click", () => {
+            drawer.classList.add("open");
+            loadBookmarks(); loadHistory();
+        });
+        closeDrawerBtn.addEventListener("click", () => drawer.classList.remove("open"));
+
+        // Init first tab
+        (async () => {
+            const id = Date.now().toString();
+            await window.orbisAPI.newTab("https://google.com");
+            addTabUI(id, "Google");
+        })();
+
+
+        // === Auto-Update Events ===
+        window.orbisAPI.onUpdateAvailable(() => {
+            alert("Update available! Downloading in background…");
+        });
+
+        window.orbisAPI.onUpdateDownloaded(() => {
+            if (confirm("Update ready! Restart Orbis now?")) {
+                window.orbisAPI.restartApp();
+            }
+        });
+    </script>
+</body>
+
+</html>
